@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Data (rebuild with `uv run python pipeline/refresh.py`)
+data/*.duckdb
+data/*.duckdb.wal
+
+# Claude Code personal settings
+.claude/settings.local.json
+
+# Streamlit
+.streamlit/secrets.toml

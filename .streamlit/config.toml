@@ -1,0 +1,4 @@
+[server]
+# Local-first, single-user app with no authentication layer -- bind to
+# localhost only so it isn't reachable from other hosts on the network.
+address = "127.0.0.1"
