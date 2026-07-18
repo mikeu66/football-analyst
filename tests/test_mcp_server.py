@@ -110,6 +110,39 @@ def test_query_respects_explicit_limit():
     assert len(rows) == 3
 
 
+def test_query_row_cap_not_bypassed_by_limit_in_string_literal():
+    """Regression test (2026-07-17 security review): the word 'limit' in a
+    string literal used to satisfy the \\blimit\\b check, skipping the row
+    cap and returning the full 57K-row table.
+    """
+    result = query("SELECT player_id, 'limit' AS tag FROM player_stats")
+    rows = ast.literal_eval(result)
+    assert len(rows) == 200
+
+
+def test_query_clamps_oversized_explicit_limit():
+    result = query("SELECT * FROM player_stats LIMIT 5000")
+    rows = ast.literal_eval(result)
+    assert len(rows) == 200
+
+
+def test_query_rejects_semicolon_smuggled_past_quote_scanner():
+    """Regression test (2026-07-17 security review): a quote character
+    inside a dollar-quoted string flipped the old char-by-char scanner's
+    state, letting a second semicolon-separated statement through.
+    """
+    result = query("SELECT $$'$$ AS a; SELECT 42 AS pwned")
+    assert isinstance(result, str)
+    assert "Error" in result
+    assert "single SQL statement" in result
+
+
+def test_query_allows_trailing_line_comment():
+    result = query("SELECT 1 AS x -- a comment")
+    rows = ast.literal_eval(result)
+    assert rows == [{"x": 1}]
+
+
 def test_query_bad_column_returns_error_not_exception():
     # Must not raise; must come back as a helpful error string.
     result = query("SELECT this_column_does_not_exist FROM player_stats")

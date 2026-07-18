@@ -10,6 +10,7 @@ import logging
 import re
 from pathlib import Path
 
+import duckdb
 from mcp.server.fastmcp import FastMCP
 
 from mcp_server.db import DB_PATH, run_query
@@ -44,34 +45,16 @@ TABLES_WITH_SEASON_WEEK = {
 }
 
 
-def _strip_trailing_semicolon(sql: str) -> str:
+def _strip_trailing_semicolons(sql: str) -> str:
     stripped = sql.strip()
-    if stripped.endswith(";"):
+    while stripped.endswith(";"):
         stripped = stripped[:-1].strip()
     return stripped
-
-
-def _has_stray_semicolon(sql: str) -> bool:
-    """True if a semicolon remains outside of quoted string literals."""
-    in_single = False
-    in_double = False
-    for ch in sql:
-        if ch == "'" and not in_double:
-            in_single = not in_single
-        elif ch == '"' and not in_single:
-            in_double = not in_double
-        elif ch == ";" and not in_single and not in_double:
-            return True
-    return False
 
 
 def _first_keyword(sql: str) -> str:
     match = re.match(r"\s*([A-Za-z]+)", sql)
     return match.group(1).upper() if match else ""
-
-
-def _has_limit(sql: str) -> bool:
-    return re.search(r"\blimit\b", sql, re.IGNORECASE) is not None
 
 
 @mcp.tool()
@@ -83,16 +66,24 @@ def query(sql: str) -> str:
     direct access to the underlying tables (player_stats, ff_opportunity,
     players, snap_counts, injuries, schedules, sleeper_players,
     sleeper_trending). Only SELECT / WITH / DESCRIBE / SHOW / SUMMARIZE
-    statements are allowed, one statement per call. Results are capped at
-    200 rows unless the query supplies its own LIMIT. Returns the rows as
-    text, or an explanatory error message if the query is rejected or fails.
+    statements are allowed, one statement per call. Results are always
+    capped at 200 rows; supply your own smaller LIMIT to get fewer.
+    Returns the rows as text, or an explanatory error message if the
+    query is rejected or fails.
     """
-    body = _strip_trailing_semicolon(sql)
+    body = _strip_trailing_semicolons(sql)
 
     if not body:
         return "Error: empty query."
 
-    if _has_stray_semicolon(body):
+    # Use DuckDB's own parser to count statements — string scanning can be
+    # fooled by comments, dollar-quoting, and escapes; the parser cannot.
+    try:
+        statements = duckdb.extract_statements(body)
+    except duckdb.Error as exc:
+        return f"Error: could not parse query: {exc}"
+
+    if len(statements) != 1:
         return "Error: only a single SQL statement is allowed per call."
 
     keyword = _first_keyword(body)
@@ -102,8 +93,11 @@ def query(sql: str) -> str:
             f"got '{keyword}'. This tool is read-only."
         )
 
-    if keyword in {"SELECT", "WITH"} and not _has_limit(body):
-        body = f"{body}\nLIMIT {ROW_CAP}"
+    if keyword in {"SELECT", "WITH"}:
+        # Wrap rather than detect the user's own LIMIT: an inner LIMIT still
+        # applies, an oversized or missing one is clamped to ROW_CAP. The
+        # newline before ")" keeps a trailing line comment from eating it.
+        body = f"SELECT * FROM (\n{body}\n) AS _capped LIMIT {ROW_CAP}"
 
     try:
         rows = run_query(body)
