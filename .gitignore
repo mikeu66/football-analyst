@@ -10,5 +10,8 @@ data/*.duckdb.wal
 # Claude Code personal settings
 .claude/settings.local.json
 
+# Security review reports (keep local; see .claude/skills/sec-review)
+docs/security-reviews/
+
 # Streamlit
 .streamlit/secrets.toml
