@@ -6,6 +6,8 @@ __pycache__/
 # Data (rebuild with `uv run python pipeline/refresh.py`)
 data/*.duckdb
 data/*.duckdb.wal
+data/*.log
+data/.refresh.lock
 
 # Claude Code personal settings
 .claude/settings.local.json
@@ -15,3 +17,4 @@ docs/security-reviews/
 
 # Streamlit
 .streamlit/secrets.toml
+eval/blind/results/
