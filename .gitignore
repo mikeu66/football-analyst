@@ -13,7 +13,7 @@ data/.refresh.lock
 # Claude Code personal settings
 .claude/settings.local.json
 
-# Security review reports (keep local; see .claude/skills/sec-review)
+# Security review reports (keep local)
 docs/security-reviews/
 
 # Streamlit
