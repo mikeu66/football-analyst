@@ -11,6 +11,7 @@ pipeline/   Data pulls → data/nfl.duckdb
   refresh.py    nflverse: weekly stats, snap counts, schedules, injuries,
                 expected fantasy points (ffverse opportunity model)
   sleeper.py    Sleeper API: player metadata + trending adds/drops
+  adp.py        Fantasy Football Calculator: current-year PPR ADP
   db.py         shared DuckDB write helper
 app/        Streamlit explorer UI
 analysis/   Ad-hoc analysis scripts / notebooks
@@ -26,6 +27,7 @@ Requires [uv](https://docs.astral.sh/uv/). Python 3.12 is pinned via
 uv sync                              # install deps into .venv
 uv run python pipeline/refresh.py    # pull nflverse data (a few minutes)
 uv run python pipeline/sleeper.py    # pull Sleeper data (seconds)
+uv run python pipeline/adp.py        # pull FFC ADP (seconds; run after refresh.py)
 uv run streamlit run app/Home.py     # open the explorer
 ```
 
@@ -68,6 +70,8 @@ opportunity gaps, market trends, and injuries — the server bridges to SQL on y
   opportunity
 - `trending` — 24-hour most added/dropped players across Sleeper leagues
 - `injury_report` — current-week injury status and practice participation
+- `adp_value` — current FFC PPR ADP vs. last season's expected points: draft
+  values, reaches, and the raw draft board
 
 ### Run the server
 

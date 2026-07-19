@@ -6,16 +6,24 @@ doc lists only the ones worth querying. Use the `query` tool's `DESCRIBE
 <table>` for anything not covered here.
 
 Seasons loaded: **2023, 2024, 2025**, all complete (every `schedules` row has
-a final score; no in-progress season). `player_stats` and `ff_opportunity`
-split regular season and playoffs:
+a final score; no in-progress season). Every weekly table mixes regular
+season and playoffs, but they mark the split differently:
 - `player_stats.season_type`: `REG` (weeks 1–18, 54,473 rows) / `POST` (weeks
   19–22, 2,572 rows).
+- `ff_opportunity` has **no `season_type` column** — playoffs are simply
+  `week >= 19`. Regular season = `WHERE week <= 18`.
 - `schedules.game_type`: finer-grained — `REG` (816), `WC` (18), `DIV` (12),
   `CON` (6), `SB` (3).
 
+**⚠ Always filter to regular season unless the user asks about playoffs**
+(`season_type = 'REG'` on `player_stats`, `week <= 18` on `ff_opportunity`).
+An unfiltered season aggregate silently includes playoff games — the totals
+look plausible and are wrong, and they won't line up with regular-season
+numbers from other tables or tools (e.g. a 17-game player shows 18+ "games").
+
 Row counts (2026-07): `player_stats` 57,045 · `ff_opportunity` 18,140 ·
 `players` 25,033 · `snap_counts` 79,767 · `injuries` 17,882 · `schedules` 855
-· `sleeper_players` 12,200 · `sleeper_trending` 200.
+· `sleeper_players` 12,200 · `sleeper_trending` 200 · `ffc_adp` 212.
 
 ## The join key
 
@@ -165,6 +173,11 @@ Verified position breakdown includes `LB` (7,871 rows, the largest group).
 Identity: `player_id` (gsis), `full_name`, `position`, `posteam`, `season`
 (VARCHAR), `week` (DOUBLE), `game_id`.
 
+**⚠ No `season_type` column — add `week <= 18` to every regular-season
+aggregate.** Weeks 19–22 are playoffs. Forgetting the filter inflates season
+totals for playoff teams' players and skews any actual-vs-expected comparison
+against regular-season stats from `player_stats` or other tools.
+
 Only real fantasy-relevant positions have meaningful volume: verified
 breakdown is WR 6,798 / RB 4,428 / TE 3,423 / QB 2,105, plus small noise counts
 for P/DB/OL/LB/DL/K (≤35 rows each, artifacts of the source model — ignore).
@@ -308,6 +321,30 @@ of Sleeper's trending endpoint, refreshed by the pipeline each run; Sleeper
 documents it as a rolling 24-hour window — the table itself carries no
 timestamp column, so "as of last refresh" is the only freshness signal
 available (see `data_status()` tool for refresh time).
+
+## `ffc_adp`
+
+Current-year PPR ADP from Fantasy Football Calculator (real mock/live
+drafts, rolling ~1-week window), refreshed by `pipeline/adp.py`. One row per
+drafted player, 12-team leagues.
+
+Columns: `ffc_id` (FFC's own id), `name`, `position` (∈ {QB, RB, WR, TE,
+`PK`, `DEF`} — note **`PK` not `K`**, and `DEF` = team defense), `team`
+(**Sleeper-style codes**: `LAR`, not `LA` — normalize before joining nflverse
+tables), `adp` (average overall pick, e.g. `1.6`), `adp_formatted`
+(`round.pick`, e.g. `"1.02"`), `times_drafted`, `high`/`low` (best/worst pick
+observed), `stdev`, `bye`, and **`gsis_id`** — bridged at ingest via
+name+position matching against `players` (verified 193/193 skill players
+matched for 2026; NULL for `DEF` rows). Snapshot metadata repeats on every
+row: `year`, `scoring` (`'ppr'`), `league_teams`, `total_drafts`,
+`window_start`/`window_end` (dates of the draft window).
+
+Join directly on `gsis_id`:
+```sql
+JOIN ff_opportunity fo ON fo.player_id = a.gsis_id   -- a = ffc_adp
+```
+The `adp_value` tool already implements the standard "current ADP vs. last
+season's expected points" value analysis — prefer it over hand-rolling SQL.
 
 ## Example queries (all verified to run)
 

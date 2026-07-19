@@ -33,6 +33,7 @@ your final report.
 | `schedules` | 855 | games incl. Vegas: `spread_line`, `total_line`, `away_moneyline`, `home_moneyline` |
 | `sleeper_players` | 12K | Sleeper player dump (age, status, `depth_chart_position`, injury fields) |
 | `sleeper_trending` | 200 | 24h most added/dropped: `player_id`, `kind` ∈ {'add','drop'}, `count` |
+| `ffc_adp` | ~212 | current-year PPR ADP from Fantasy Football Calculator (`pipeline/adp.py`), gsis_id bridged at ingest; positions use `PK`/`DEF`, teams use Sleeper-style codes (`LAR`) |
 
 ## The join key (critical)
 

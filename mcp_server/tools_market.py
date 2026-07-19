@@ -11,13 +11,16 @@ def register(mcp: FastMCP) -> None:
     """Register market data tools with the MCP server."""
 
     @mcp.tool()
-    def trending(kind: str = "add") -> str:
+    def trending(kind: str = "add", position: str | None = None) -> str:
         """Return trending players on Sleeper (adds or drops).
 
         Call this when the user asks who to add off waivers, who's being
         dropped, or what the market is doing. Returns the top ~25 players
         by add/drop count (as of last refresh), with their current team
-        and position.
+        and position. Optional position filter (QB, RB, WR, TE, K, DEF)
+        narrows to one position — the underlying pool is Sleeper's top
+        ~100 trending players per kind, so a thin position may return
+        only a few rows.
         """
         kind_lower = kind.lower().strip()
         if kind_lower not in {"add", "drop"}:
@@ -27,26 +30,49 @@ def register(mcp: FastMCP) -> None:
                 "who's being dropped."
             )
 
+        position_filter = ""
+        pos = None
+        if position is not None:
+            pos = position.upper().strip()
+            if pos == "DST":
+                pos = "DEF"
+            if pos not in {"QB", "RB", "WR", "TE", "K", "DEF"}:
+                return (
+                    f"Invalid position: '{position}'. Must be one of "
+                    "QB, RB, WR, TE, K, DEF."
+                )
+            position_filter = f"AND sp.position = '{pos}'"
+
         sql = f"""
-        SELECT sp.full_name, sp.team, sp.position, st.count
+        SELECT
+            -- team defenses have no full_name; their Sleeper id is the team code
+            COALESCE(sp.full_name, sp.player_id) AS full_name,
+            sp.team, sp.position, st.count
         FROM sleeper_trending st
         JOIN sleeper_players sp ON sp.player_id = st.player_id
         WHERE st.kind = '{kind_lower}'
+        {position_filter}
         ORDER BY st.count DESC
         LIMIT 25
         """
 
         rows = run_query(sql)
         if not rows:
+            if pos is not None:
+                return (
+                    f"No {pos}s among Sleeper's top trending {kind_lower}s "
+                    "right now."
+                )
             return f"No trending {kind_lower} data available."
 
-        lines = [f"Top trending {kind_lower}s (as of last refresh):"]
+        label = f"{pos} only, as of last refresh" if pos else "as of last refresh"
+        lines = [f"Top trending {kind_lower}s ({label}):"]
         lines.append("")
         for row in rows:
             count = row["count"]
-            name = row["full_name"]
-            team = row["team"]
-            pos = row["position"]
+            name = row["full_name"] or "?"
+            team = row["team"] or "FA"
+            pos = row["position"] or "?"
             lines.append(f"  {count:3d}  {name:20s}  {pos}  {team}")
 
         return "\n".join(lines)

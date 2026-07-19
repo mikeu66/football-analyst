@@ -21,7 +21,7 @@ import pytest
 
 from mcp_server.server import data_status, describe_data, query
 from mcp_server.tools_players import player_lookup
-from mcp_server import tools_opportunity, tools_market
+from mcp_server import tools_draft, tools_opportunity, tools_market
 
 
 class _ToolShim:
@@ -42,6 +42,7 @@ def _capture_tools() -> dict[str, object]:
     shim = _ToolShim()
     tools_opportunity.register(shim)
     tools_market.register(shim)
+    tools_draft.register(shim)
     return shim.captured
 
 
@@ -49,6 +50,7 @@ _TOOLS = _capture_tools()
 opportunity_gap = _TOOLS["opportunity_gap"]
 trending = _TOOLS["trending"]
 injury_report = _TOOLS["injury_report"]
+adp_value = _TOOLS["adp_value"]
 
 
 # --- 1. `query` guardrails -----------------------------------------------
@@ -165,6 +167,7 @@ def test_data_status_mentions_all_tables_and_max_season():
         "schedules",
         "sleeper_players",
         "sleeper_trending",
+        "ffc_adp",
     ]:
         assert table in result
 
@@ -296,6 +299,29 @@ def test_trending_banana_helpful_message():
     assert "add" in result and "drop" in result
 
 
+def test_trending_position_filter_wr_only():
+    result = trending("add", position="wr")
+    assert isinstance(result, str)
+    data_lines = [
+        line for line in result.splitlines()
+        if line.strip() and not line.startswith("Top trending")
+    ]
+    assert data_lines, "expected at least one trending WR"
+    assert all(" WR " in line for line in data_lines)
+
+
+def test_trending_dst_aliases_to_def():
+    result = trending("add", position="DST")
+    assert isinstance(result, str)
+    assert "Invalid" not in result
+
+
+def test_trending_bad_position_helpful_message():
+    result = trending("add", position="banana")
+    assert "Invalid position" in result
+    assert "banana" in result
+
+
 # --- 4d. injury_report -------------------------------------------------------
 
 
@@ -376,3 +402,146 @@ def test_trending_never_raises(garbage):
 def test_injury_report_never_raises(garbage):
     result = injury_report(team=garbage)
     assert isinstance(result, str)
+
+
+# --- 8. `ffc_adp` table + `adp_value` ------------------------------------
+
+
+def test_ffc_adp_table_shape():
+    rows = ast.literal_eval(query(
+        "SELECT COUNT(*) AS n, "
+        "COUNT(gsis_id) AS bridged, "
+        "COUNT(*) FILTER (position NOT IN ('DEF')) AS skill "
+        "FROM ffc_adp"
+    ))
+    assert rows[0]["n"] > 100
+    # gsis bridge should cover nearly every non-DEF player
+    assert rows[0]["bridged"] >= 0.95 * rows[0]["skill"]
+
+
+def test_ffc_adp_snapshot_meta_present():
+    rows = ast.literal_eval(query(
+        "SELECT DISTINCT year, scoring, league_teams, total_drafts FROM ffc_adp"
+    ))
+    assert len(rows) == 1
+    meta = rows[0]
+    assert meta["scoring"] == "ppr"
+    assert meta["year"] >= 2026
+    assert meta["total_drafts"] > 0
+
+
+def test_adp_value_default_is_sorted_by_value():
+    payload = json.loads(adp_value())
+    assert "header" in payload and "PPR ADP" in payload["header"]
+    data = payload["data"]
+    assert data, "expected non-empty value board"
+    scores = [r["value_score"] for r in data]
+    assert all(s is not None for s in scores)
+    assert scores == sorted(scores, reverse=True)
+    row = data[0]
+    for key in ("player", "position", "team", "adp", "adp_pos_rank",
+                "exp_pos_rank", "expected_per_game", "value_score"):
+        assert key in row
+
+
+def test_adp_value_reach_is_ascending():
+    payload = json.loads(adp_value(sort="reach"))
+    scores = [r["value_score"] for r in payload["data"]]
+    assert scores == sorted(scores)
+
+
+def test_adp_value_adp_sort_is_draft_order():
+    payload = json.loads(adp_value(sort="adp", limit=50))
+    adps = [r["adp"] for r in payload["data"]]
+    assert adps == sorted(adps)
+    assert adps[0] < 5  # board starts at the top picks
+
+
+def test_adp_value_position_filter():
+    payload = json.loads(adp_value(position="wr"))
+    assert payload["data"]
+    assert all(r["position"] == "WR" for r in payload["data"])
+
+
+def test_adp_value_limit_capped():
+    payload = json.loads(adp_value(sort="adp", limit=999))
+    assert len(payload["data"]) <= 50
+
+
+def test_adp_value_rejects_bad_inputs():
+    assert "Error" in adp_value(position="ZZ")
+    assert "Error" in adp_value(sort="sideways")
+    assert "Error" in adp_value(limit="lots")
+
+
+def test_adp_value_player_search():
+    payload = json.loads(adp_value(player="Bijan Robinson"))
+    data = payload["data"]
+    assert data, "expected Bijan Robinson on the ADP board"
+    assert all("bijan" in r["player"].lower() for r in data)
+    for key in ("adp", "adp_pos_rank", "value_score"):
+        assert key in data[0]
+
+
+def test_adp_value_player_search_reaches_deep_board():
+    """Regression: single-player questions must work for players drafted
+    past pick ~50, who never appear in a limit-capped board scan."""
+    deep = ast.literal_eval(
+        query("SELECT name FROM ffc_adp ORDER BY adp DESC LIMIT 1")
+    )[0]["name"]
+    payload = json.loads(adp_value(player=deep))
+    assert any(r["player"] == deep for r in payload["data"])
+
+
+def test_adp_value_player_no_match_explains_undrafted():
+    payload = json.loads(adp_value(player="Zzyzx Nobody"))
+    assert payload["data"] == []
+    assert "undrafted" in payload["message"]
+
+
+@pytest.mark.parametrize("garbage", ["", " ", "!!!", "🏈" * 5, "'; DROP TABLE players; --"])
+def test_adp_value_never_raises(garbage):
+    result = adp_value(position=garbage)
+    assert isinstance(result, str)
+
+
+@pytest.mark.parametrize("garbage", ["", " ", "!!!", "🏈" * 5, "'; DROP TABLE players; --"])
+def test_adp_value_player_never_raises(garbage):
+    result = adp_value(player=garbage)
+    assert isinstance(result, str)
+
+
+# --- 9. ADP pipeline name bridging ---------------------------------------
+
+
+def _pipeline_adp():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
+    import adp
+    return adp
+
+
+def test_norm_name_accents_and_suffixes():
+    adp = _pipeline_adp()
+    assert adp.norm_name("Eddy Piñeiro") == "eddy pineiro"
+    assert adp.norm_name("A.J. Brown") == "aj brown"
+    assert adp.norm_name("Kenneth Walker III", strip_suffix=True) == "kenneth walker"
+    # suffix kept by default — protects Harrison Jr. vs the retired Harrison
+    assert adp.norm_name("Marvin Harrison Jr.") == "marvin harrison jr"
+
+
+def test_bridge_gsis_known_players():
+    adp = _pipeline_adp()
+    pl = pytest.importorskip("polars")
+    board = pl.DataFrame({
+        "name": ["Marvin Harrison Jr.", "Justin Jefferson", "Travis Hunter", "Some Nobody"],
+        "position": ["WR", "WR", "WR", "WR"],
+        "team": ["ARI", "MIN", "JAX", "ATL"],
+    })
+    out = {r["name"]: r["gsis_id"] for r in adp.bridge_gsis(board).iter_rows(named=True)}
+    assert out["Marvin Harrison Jr."] == "00-0039849"  # the son, not the retired WR
+    assert out["Justin Jefferson"] == "00-0036322"     # MIN WR, not CLE LB
+    assert out["Travis Hunter"] == "00-0040718"        # cross-position fallback (CB in nflverse)
+    assert out["Some Nobody"] is None

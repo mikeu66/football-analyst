@@ -34,6 +34,7 @@ STATUS_TABLES = [
     "schedules",
     "sleeper_players",
     "sleeper_trending",
+    "ffc_adp",
 ]
 
 TABLES_WITH_SEASON_WEEK = {
@@ -176,6 +177,7 @@ def data_status() -> str:
 # --- Curated tool registration -----------------------------------------
 # Imported eagerly: a broken tool module must fail loudly at startup rather
 # than leave the server running with a tool silently missing.
+from mcp_server.tools_draft import register as _register_draft
 from mcp_server.tools_market import register as _register_market
 from mcp_server.tools_opportunity import register as _register_opportunity
 from mcp_server.tools_players import register as _register_players
@@ -183,6 +185,7 @@ from mcp_server.tools_players import register as _register_players
 _register_players(mcp)
 _register_opportunity(mcp)
 _register_market(mcp)
+_register_draft(mcp)
 
 
 if __name__ == "__main__":
