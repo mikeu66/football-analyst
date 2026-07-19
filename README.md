@@ -1,5 +1,7 @@
 # NFL Analysis
 
+[![CI](https://github.com/mikeu66/football-analyst/actions/workflows/ci.yml/badge.svg)](https://github.com/mikeu66/football-analyst/actions/workflows/ci.yml)
+
 Player analysis for both fantasy football (redraft) and real-football purposes.
 Local-first: all data lives in a single DuckDB file that you can rebuild from
 free sources at any time.
