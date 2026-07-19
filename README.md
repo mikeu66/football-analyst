@@ -43,7 +43,9 @@ games; Sleeper asks that the full player dump be pulled at most once per day.
 hours old, and a lock file prevents concurrent runs. A `SessionStart` hook in
 `.claude/settings.json` runs it (async, stale-gated) every time a Claude Code
 session opens in this repo, so the data self-refreshes at most once a day
-without any daemon or system cron.
+without any daemon or system cron. (If you clone this repo, Claude Code asks
+you to approve the project's settings before any hook runs — nothing executes
+automatically until you opt in.)
 
 ## Data notes
 
@@ -92,7 +94,7 @@ Runs on stdio, ready to accept JSON-RPC calls from Claude.
 
 ### Register with Claude Code
 
-From the repo root (`/workspace`):
+From the repo root:
 
 ```bash
 claude mcp add nfl-data -- uv run python -m mcp_server.server
@@ -110,13 +112,12 @@ Add this to your `claude_desktop_config.json`
 {
   "mcpServers": {
     "nfl-data": {
-      "command": "/usr/local/bin/uv",
-      "args": ["--directory", "/workspace", "run", "python", "-m", "mcp_server.server"]
+      "command": "/absolute/path/to/uv",
+      "args": ["--directory", "/absolute/path/to/football-analyst", "run", "python", "-m", "mcp_server.server"]
     }
   }
 }
 ```
 
-Note: Replace `/workspace` with the actual path to this repo if it differs; if `uv` is not 
-at `/usr/local/bin/uv` on your system, run `which uv` to find it and update the `command` 
-field accordingly.
+Claude Desktop needs absolute paths: set `command` to the output of `which uv` and
+`--directory` to this repo's root.

@@ -5,7 +5,7 @@ description: Ground-truth schema, join keys, and code conventions for the NFL Du
 
 # NFL Data Context
 
-Ground truth for `/workspace/data/nfl.duckdb`. Facts below were verified
+Ground truth for `data/nfl.duckdb` (repo-relative). Facts below were verified
 against the live database (July 2026, seasons 2023–2025 loaded). If something
 here contradicts the database, trust the database and flag the discrepancy in
 your final report.

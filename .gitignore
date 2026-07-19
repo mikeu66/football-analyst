@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.pytest_cache/
 
 # Data (rebuild with `uv run python pipeline/refresh.py`)
 data/*.duckdb
@@ -17,4 +18,6 @@ docs/security-reviews/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Blind-eval outputs
 eval/blind/results/

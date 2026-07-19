@@ -1,5 +1,7 @@
 # Plan: Bring-Your-Own-Key (BYOK) MCP Chat for Public Hosting
 
+> Design notes for a possible future change — not yet implemented.
+
 ## Goal
 Let the MCP Chat page (`app/pages/1_MCP_Chat.py`) be used by visitors on a
 publicly hosted deployment, each paying for their own Anthropic usage via

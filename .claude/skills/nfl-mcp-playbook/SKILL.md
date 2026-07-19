@@ -14,7 +14,7 @@ the plan; if a task's spec turns out wrong, fix the plan file first.
 Do the work inline, yourself. At this codebase's size (~800 lines in
 `mcp_server/`), subagent fan-out costs more in cold-start context loading
 and duplicated verification than it saves. Before touching any file, read
-`/workspace/.claude/skills/nfl-data-context/SKILL.md` — it is authoritative;
+`.claude/skills/nfl-data-context/SKILL.md` — it is authoritative;
 do not re-derive schema facts.
 
 Delegate only when both are true:
