@@ -53,8 +53,8 @@ def base_layout(fig: go.Figure, *, y_title: str) -> go.Figure:
         margin=dict(l=10, r=10, t=10, b=10),
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        xaxis=dict(title="Week", showgrid=False, tickmode="linear", dtick=1),
-        yaxis=dict(title=y_title, gridcolor=GRID, zerolinecolor=GRID),
+        xaxis=dict(title="Week", showgrid=False, tickmode="linear", dtick=1, automargin=True),
+        yaxis=dict(title=y_title, gridcolor=GRID, zerolinecolor=GRID, automargin=True),
     )
     return fig
 

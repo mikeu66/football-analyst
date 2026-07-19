@@ -4,6 +4,8 @@ Player analysis for both fantasy football (redraft) and real-football purposes.
 Local-first: all data lives in a single DuckDB file that you can rebuild from
 free sources at any time.
 
+![NFL player explorer — weekly fantasy points for selected players](docs/explorer.png)
+
 ## Layout
 
 ```
