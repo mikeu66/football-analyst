@@ -16,12 +16,23 @@ from __future__ import annotations
 
 import ast
 import json
+from pathlib import Path
 
 import pytest
 
 from mcp_server.server import data_status, describe_data, query
 from mcp_server.tools_players import player_lookup
 from mcp_server import tools_draft, tools_opportunity, tools_market
+
+_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "nfl.duckdb"
+
+# Tests that assert on real data (or run SQL that reaches the DB) skip when
+# the database hasn't been built — e.g. in CI. Guardrail/error-path tests
+# still run everywhere.
+requires_db = pytest.mark.skipif(
+    not _DB_PATH.exists(),
+    reason="data/nfl.duckdb not built; run the pipeline (see README)",
+)
 
 
 class _ToolShim:
@@ -84,6 +95,7 @@ def test_query_rejects_multi_statement():
     assert "single SQL statement" in result
 
 
+@requires_db
 def test_query_allows_trailing_semicolon():
     result = query("SELECT 1 AS x;")
     assert isinstance(result, str)
@@ -92,6 +104,7 @@ def test_query_allows_trailing_semicolon():
     assert rows == [{"x": 1}]
 
 
+@requires_db
 def test_query_allows_semicolon_inside_string_literal():
     result = query("SELECT 'a;b' AS x")
     assert isinstance(result, str)
@@ -100,18 +113,21 @@ def test_query_allows_semicolon_inside_string_literal():
     assert rows == [{"x": "a;b"}]
 
 
+@requires_db
 def test_query_appends_row_cap_when_no_limit():
     result = query("SELECT * FROM player_stats")
     rows = ast.literal_eval(result)
     assert len(rows) == 200
 
 
+@requires_db
 def test_query_respects_explicit_limit():
     result = query("SELECT * FROM player_stats LIMIT 3")
     rows = ast.literal_eval(result)
     assert len(rows) == 3
 
 
+@requires_db
 def test_query_row_cap_not_bypassed_by_limit_in_string_literal():
     """Regression test (2026-07-17 security review): the word 'limit' in a
     string literal used to satisfy the \\blimit\\b check, skipping the row
@@ -122,6 +138,7 @@ def test_query_row_cap_not_bypassed_by_limit_in_string_literal():
     assert len(rows) == 200
 
 
+@requires_db
 def test_query_clamps_oversized_explicit_limit():
     result = query("SELECT * FROM player_stats LIMIT 5000")
     rows = ast.literal_eval(result)
@@ -139,6 +156,7 @@ def test_query_rejects_semicolon_smuggled_past_quote_scanner():
     assert "single SQL statement" in result
 
 
+@requires_db
 def test_query_allows_trailing_line_comment():
     result = query("SELECT 1 AS x -- a comment")
     rows = ast.literal_eval(result)
@@ -155,6 +173,7 @@ def test_query_bad_column_returns_error_not_exception():
 # --- 2. `data_status` -----------------------------------------------------
 
 
+@requires_db
 def test_data_status_mentions_all_tables_and_max_season():
     result = data_status()
     assert isinstance(result, str)
@@ -192,6 +211,7 @@ def test_describe_data_returns_semantics_doc():
 # --- 4a. player_lookup happy paths + regression tests ----------------------
 
 
+@requires_db
 def test_player_lookup_mahomes():
     result = player_lookup("Patrick Mahomes")
     rows = json.loads(result)
@@ -201,6 +221,7 @@ def test_player_lookup_mahomes():
     assert row["matched_via"] == "gsis"
 
 
+@requires_db
 def test_player_lookup_chase_name_position_bridge():
     """Regression test: Ja'Marr Chase has NULL gsis_id AND NULL espn_id on
     the Sleeper side, so he can only be bridged via (full_name, position).
@@ -216,6 +237,7 @@ def test_player_lookup_chase_name_position_bridge():
     assert row["matched_via"] == "name_position"
 
 
+@requires_db
 def test_player_lookup_jefferson_disambiguates_two_humans():
     """Regression test: there are two distinct 'Justin Jefferson's --
     the MIN WR (fantasy-relevant, bridged via espn_id, gsis 00-0036322,
@@ -240,6 +262,7 @@ def test_player_lookup_jefferson_disambiguates_two_humans():
 # --- 4b. opportunity_gap ----------------------------------------------------
 
 
+@requires_db
 def test_opportunity_gap_default_shape_and_playoff_exclusion():
     result = opportunity_gap()
     parsed = json.loads(result)
@@ -257,6 +280,7 @@ def test_opportunity_gap_default_shape_and_playoff_exclusion():
         assert row["games"] <= 18
 
 
+@requires_db
 def test_opportunity_gap_position_and_window_filter():
     result = opportunity_gap(position="WR", last_n_weeks=3)
     parsed = json.loads(result)
@@ -277,6 +301,7 @@ def test_opportunity_gap_bad_position_helpful_message():
 # --- 4c. trending -----------------------------------------------------------
 
 
+@requires_db
 def test_trending_add_returns_real_names():
     result = trending("add")
     assert isinstance(result, str)
@@ -299,6 +324,7 @@ def test_trending_banana_helpful_message():
     assert "add" in result and "drop" in result
 
 
+@requires_db
 def test_trending_position_filter_wr_only():
     result = trending("add", position="wr")
     assert isinstance(result, str)
@@ -310,6 +336,7 @@ def test_trending_position_filter_wr_only():
     assert all(" WR " in line for line in data_lines)
 
 
+@requires_db
 def test_trending_dst_aliases_to_def():
     result = trending("add", position="DST")
     assert isinstance(result, str)
@@ -325,6 +352,7 @@ def test_trending_bad_position_helpful_message():
 # --- 4d. injury_report -------------------------------------------------------
 
 
+@requires_db
 def test_injury_report_kc_row_count_matches_header():
     """Regression test: this previously returned 546 rows spanning
     2023-2025 while the header claimed week 18. The header and body
@@ -342,6 +370,7 @@ def test_injury_report_kc_row_count_matches_header():
         assert "  KC  " in line
 
 
+@requires_db
 def test_injury_report_lar_matches_la():
     """Regression test: Sleeper calls the Rams 'LAR', `injuries` calls
     them 'LA'. 'LAR' used to be rejected outright.
@@ -390,6 +419,7 @@ def test_opportunity_gap_never_raises(garbage):
 
 
 @pytest.mark.parametrize("garbage", ["", " ", "!!!", "🏈" * 5, "'; DROP TABLE players; --", None])
+@requires_db
 def test_trending_never_raises(garbage):
     if garbage is None:
         result = trending()
@@ -407,6 +437,7 @@ def test_injury_report_never_raises(garbage):
 # --- 8. `ffc_adp` table + `adp_value` ------------------------------------
 
 
+@requires_db
 def test_ffc_adp_table_shape():
     rows = ast.literal_eval(query(
         "SELECT COUNT(*) AS n, "
@@ -419,6 +450,7 @@ def test_ffc_adp_table_shape():
     assert rows[0]["bridged"] >= 0.95 * rows[0]["skill"]
 
 
+@requires_db
 def test_ffc_adp_snapshot_meta_present():
     rows = ast.literal_eval(query(
         "SELECT DISTINCT year, scoring, league_teams, total_drafts FROM ffc_adp"
@@ -430,6 +462,7 @@ def test_ffc_adp_snapshot_meta_present():
     assert meta["total_drafts"] > 0
 
 
+@requires_db
 def test_adp_value_default_is_sorted_by_value():
     payload = json.loads(adp_value())
     assert "header" in payload and "PPR ADP" in payload["header"]
@@ -444,12 +477,14 @@ def test_adp_value_default_is_sorted_by_value():
         assert key in row
 
 
+@requires_db
 def test_adp_value_reach_is_ascending():
     payload = json.loads(adp_value(sort="reach"))
     scores = [r["value_score"] for r in payload["data"]]
     assert scores == sorted(scores)
 
 
+@requires_db
 def test_adp_value_adp_sort_is_draft_order():
     payload = json.loads(adp_value(sort="adp", limit=50))
     adps = [r["adp"] for r in payload["data"]]
@@ -457,12 +492,14 @@ def test_adp_value_adp_sort_is_draft_order():
     assert adps[0] < 5  # board starts at the top picks
 
 
+@requires_db
 def test_adp_value_position_filter():
     payload = json.loads(adp_value(position="wr"))
     assert payload["data"]
     assert all(r["position"] == "WR" for r in payload["data"])
 
 
+@requires_db
 def test_adp_value_limit_capped():
     payload = json.loads(adp_value(sort="adp", limit=999))
     assert len(payload["data"]) <= 50
@@ -474,6 +511,7 @@ def test_adp_value_rejects_bad_inputs():
     assert "Error" in adp_value(limit="lots")
 
 
+@requires_db
 def test_adp_value_player_search():
     payload = json.loads(adp_value(player="Bijan Robinson"))
     data = payload["data"]
@@ -483,6 +521,7 @@ def test_adp_value_player_search():
         assert key in data[0]
 
 
+@requires_db
 def test_adp_value_player_search_reaches_deep_board():
     """Regression: single-player questions must work for players drafted
     past pick ~50, who never appear in a limit-capped board scan."""
@@ -493,6 +532,7 @@ def test_adp_value_player_search_reaches_deep_board():
     assert any(r["player"] == deep for r in payload["data"])
 
 
+@requires_db
 def test_adp_value_player_no_match_explains_undrafted():
     payload = json.loads(adp_value(player="Zzyzx Nobody"))
     assert payload["data"] == []
@@ -532,6 +572,7 @@ def test_norm_name_accents_and_suffixes():
     assert adp.norm_name("Marvin Harrison Jr.") == "marvin harrison jr"
 
 
+@requires_db
 def test_bridge_gsis_known_players():
     adp = _pipeline_adp()
     pl = pytest.importorskip("polars")
