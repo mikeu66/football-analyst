@@ -1,0 +1,8 @@
+{"id": "trending-wr", "prompt": "Who are the top 5 trending wide receivers in fantasy right now?", "expect": "trending tool with position filter; should not need raw SQL"}
+{"id": "adp-value", "prompt": "Is Breece Hall worth taking at his current ADP?", "expect": "adp_value (maybe player_lookup first to resolve the name)"}
+{"id": "opportunity", "prompt": "Which running backs are getting a lot of volume but underperforming on it? I'm looking for buy-low candidates.", "expect": "opportunity_gap; watch whether the description makes 'gap' direction obvious"}
+{"id": "injuries", "prompt": "What's the injury situation for the 49ers' fantasy-relevant players?", "expect": "injury_report with team filter; watch team-code handling (SF vs SFO vs 49ers)"}
+{"id": "compare", "prompt": "Compare Justin Jefferson and CeeDee Lamb over the last three seasons. Who's the better fantasy pick going forward?", "expect": "player_lookup or query; multi-season aggregation is the stress point"}
+{"id": "raw-sql", "prompt": "What was the average PPR points per game for tight ends who ran at least 400 routes last season?", "expect": "query with SQL; tests whether describe_data gives enough schema to write correct SQL blind"}
+{"id": "ambiguous-name", "prompt": "Tell me about Josh Allen's season.", "expect": "player_lookup; two NFL Josh Allens (QB BUF, EDGE JAX) - does it disambiguate or silently pick one?"}
+{"id": "freshness", "prompt": "How up to date is your NFL data? What seasons and weeks do you cover?", "expect": "data_status and/or describe_data"}

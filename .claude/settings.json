@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/pipeline/refresh_all.sh --if-stale",
+            "async": true,
+            "timeout": 900,
+            "statusMessage": "Refreshing NFL data (stale check)"
+          }
+        ]
+      }
+    ]
+  }
+}

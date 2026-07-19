@@ -36,6 +36,15 @@ uv run streamlit run app/Home.py     # open the explorer
 wholesale, so refresh as often as you like — nflverse updates within ~24h of
 games; Sleeper asks that the full player dump be pulled at most once per day.
 
+### Automated refresh
+
+`pipeline/refresh_all.sh` runs all three pulls in sequence, logging to
+`data/refresh.log`; `--if-stale` makes it a no-op when the DB is under 20
+hours old, and a lock file prevents concurrent runs. A `SessionStart` hook in
+`.claude/settings.json` runs it (async, stale-gated) every time a Claude Code
+session opens in this repo, so the data self-refreshes at most once a day
+without any daemon or system cron.
+
 ## Data notes
 
 - **Join key between the two sources:** `sleeper_players.gsis_id` ↔ nflverse
